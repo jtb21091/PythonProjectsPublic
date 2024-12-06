@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ski Weather App</title>
+</head>
+<body>
+    <h1>Ski Weather App</h1>
+    <div id="resorts">Loading...</div>
+    <script>
+        async function fetchWeather() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const response = await fetch("/weather", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            location: {
+                                latitude: position.coords.latitude,
+                                longitude: position.coords.longitude,
+                            },
+                        }),
+                    });
+                    const data = await response.json();
+                    displayWeather(data);
+                });
+            } else {
+                alert("Geolocation is not supported by your browser.");
+            }
+        }
+
+        function displayWeather(resorts) {
+            const container = document.getElementById("resorts");
+            container.innerHTML = "";
+            resorts.forEach((resort) => {
+                const div = document.createElement("div");
+                div.innerHTML = `
+                    <h3>${resort.name}</h3>
+                    <p>Current Weather: ${resort.current_weather}</p>
+                    <p>Forecast: ${resort.forecast.join(", ")}</p>
+                    <p>Distance: ${resort.distance} miles</p>
+                    <a href="${resort.website}" target="_blank">Visit Website</a>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", fetchWeather);
+    </script>
+</body>
+</html>

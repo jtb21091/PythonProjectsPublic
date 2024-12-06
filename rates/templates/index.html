@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rate Finder</title>
+</head>
+<body>
+    <h1>Search for Rates</h1>
+    <form method="POST" action="/search">
+        <label for="origin_city">Origin City:</label>
+        <input type="text" id="origin_city" name="origin_city"><br><br>
+        
+        <label for="origin_state">Origin State:</label>
+        <input type="text" id="origin_state" name="origin_state"><br><br>
+        
+        <label for="destination_city">Destination City:</label>
+        <input type="text" id="destination_city" name="destination_city"><br><br>
+        
+        <label for="destination_state">Destination State:</label>
+        <input type="text" id="destination_state" name="destination_state"><br><br>
+        
+        <label for="carrier">Carrier:</label>
+        <input type="text" id="carrier" name="carrier"><br><br>
+        
+        <label for="mode">Mode:</label>
+        <input type="text" id="mode" name="mode"><br><br>
+        
+        <button type="submit">Search</button>
+    </form>
+
+    {% if results %}
+        <h2>Search Results:</h2>
+        <table border="1">
+            <tr>
+                <th>Total Rate</th>
+                <th>Carrier</th>
+                <th>Mode</th>
+                <th>Expiration</th>
+            </tr>
+            {% for result in results %}
+            <tr>
+                <td>{{ result['Total'] }}</td>
+                <td>{{ result['Carrier'] }}</td>
+                <td>{{ result['Mode'] }}</td>
+                <td>{{ result['Expiration'] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+</body>
+</html>
