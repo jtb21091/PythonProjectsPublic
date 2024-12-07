@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Price Lookup</title>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Fetch data from the CSV file
+            let schoolData = [];
+
+            fetch('2022-2023.csv')
+                .then(response => response.text())
+                .then(csv => {
+                    const rows = csv.split('\n').map(row => row.split(','));
+                    const headers = rows[0];
+
+                    schoolData = rows.slice(1).map(row => {
+                        const school = { name: row[0], prices: {} };
+
+                        headers.forEach((header, index) => {
+                            if (header.includes('on campus')) {
+                                school.prices['on-campus'] = school.prices['on-campus'] || {};
+                                if (header.includes('in-district')) school.prices['on-campus']['in-district'] = parseFloat(row[index]) || null;
+                                if (header.includes('in-state')) school.prices['on-campus']['in-state'] = parseFloat(row[index]) || null;
+                                if (header.includes('out-of-state')) school.prices['on-campus']['out-of-state'] = parseFloat(row[index]) || null;
+                            }
+
+                            if (header.includes('off campus (not with family)')) {
+                                school.prices['off-campus (not with family)'] = school.prices['off-campus (not with family)'] || {};
+                                if (header.includes('in-district')) school.prices['off-campus (not with family)']['in-district'] = parseFloat(row[index]) || null;
+                                if (header.includes('in-state')) school.prices['off-campus (not with family)']['in-state'] = parseFloat(row[index]) || null;
+                                if (header.includes('out-of-state')) school.prices['off-campus (not with family)']['out-of-state'] = parseFloat(row[index]) || null;
+                            }
+
+                            if (header.includes('off campus (with family)')) {
+                                school.prices['off-campus (with family)'] = school.prices['off-campus (with family)'] || {};
+                                if (header.includes('in-district')) school.prices['off-campus (with family)']['in-district'] = parseFloat(row[index]) || null;
+                                if (header.includes('in-state')) school.prices['off-campus (with family)']['in-state'] = parseFloat(row[index]) || null;
+                                if (header.includes('out-of-state')) school.prices['off-campus (with family)']['out-of-state'] = parseFloat(row[index]) || null;
+                            }
+                        });
+
+                        return school;
+                    });
+                });
+
+            // Populate auto-complete for school names
+            const schoolInput = document.getElementById('school');
+            const suggestions = document.getElementById('suggestions');
+
+            schoolInput.addEventListener('input', () => {
+                const query = schoolInput.value.toLowerCase();
+                suggestions.innerHTML = '';
+
+                if (query) {
+                    const matches = schoolData.filter(school => school.name.toLowerCase().includes(query));
+
+                    matches.forEach(match => {
+                        const option = document.createElement('div');
+                        option.textContent = match.name;
+                        option.className = 'suggestion';
+                        option.addEventListener('click', () => {
+                            schoolInput.value = match.name;
+                            suggestions.innerHTML = '';
+                        });
+                        suggestions.appendChild(option);
+                    });
+                }
+            });
+
+            // Handle price lookup
+            document.getElementById('lookup').addEventListener('click', () => {
+                const schoolName = schoolInput.value;
+                const livingSituation = document.getElementById('living-situation').value;
+                const residency = document.getElementById('residency').value;
+
+                const school = schoolData.find(school => school.name === schoolName);
+                if (school) {
+                    const price = school.prices[livingSituation]?.[residency];
+                    const result = document.getElementById('result');
+
+                    if (price !== undefined) {
+                        result.textContent = `The price for ${schoolName} (${livingSituation}, ${residency}) is $${price}.`;
+                    } else {
+                        result.textContent = `Price information not available for the selected options.`;
+                    }
+                } else {
+                    alert('School not found. Please select a valid school from the suggestions.');
+                }
+            });
+        });
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #suggestions {
+            border: 1px solid #ccc;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .suggestion {
+            padding: 5px;
+            cursor: pointer;
+        }
+        .suggestion:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>School Price Lookup</h1>
+
+    <label for="school">School Name:</label>
+    <input type="text" id="school" placeholder="Type to search...">
+    <div id="suggestions"></div>
+
+    <label for="living-situation">Living Situation:</label>
+    <select id="living-situation">
+        <option value="on-campus">On-Campus</option>
+        <option value="off-campus (not with family)">Off-Campus (Not with Family)</option>
+        <option value="off-campus (with family)">Off-Campus (With Family)</option>
+    </select>
+
+    <label for="residency">Residency:</label>
+    <select id="residency">
+        <option value="in-district">In-District</option>
+        <option value="in-state">In-State</option>
+        <option value="out-of-state">Out-of-State</option>
+    </select>
+
+    <button id="lookup">Look Up Price</button>
+
+    <h2 id="result"></h2>
+</body>
+</html>
