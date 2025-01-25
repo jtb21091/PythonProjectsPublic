@@ -4,11 +4,74 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>School Price Lookup</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #suggestions {
+            border: 1px solid #ccc;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .suggestion {
+            padding: 5px;
+            cursor: pointer;
+        }
+        .suggestion:hover {
+            background-color: #f0f0f0;
+        }
+        #compare-list {
+            margin-top: 20px;
+        }
+        #compare-list ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        #compare-list ul li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>School Price Lookup</h1>
+
+    <label for="school">School Name:</label>
+    <input type="text" id="school" placeholder="Type to search...">
+    <div id="suggestions"></div>
+
+    <label for="living-situation">Living Situation:</label>
+    <select id="living-situation">
+        <option value="on-campus">On-Campus</option>
+        <option value="off-campus (not with family)">Off-Campus (Not with Family)</option>
+        <option value="off-campus (with family)">Off-Campus (With Family)</option>
+    </select>
+
+    <label for="residency">Residency:</label>
+    <select id="residency">
+        <option value="in-district">In-District</option>
+        <option value="in-state">In-State</option>
+        <option value="out-of-state">Out-of-State</option>
+    </select>
+
+    <button id="lookup">Look Up Price</button>
+    <h2 id="result"></h2>
+
+    <button id="add-to-compare">Add to Compare</button>
+    <button id="download-excel">Download Excel</button>
+
+    <div id="compare-list">
+        <h3>Schools to Compare:</h3>
+        <ul id="compare-list-items"></ul>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Fetch data from the CSV file
             let schoolData = [];
+            let selectedSchools = [];
 
+            // Fetch and parse CSV
             fetch('2022-2023.csv')
                 .then(response => response.text())
                 .then(csv => {
@@ -45,7 +108,7 @@
                     });
                 });
 
-            // Populate auto-complete for school names
+            // Auto-complete for school names
             const schoolInput = document.getElementById('school');
             const suggestions = document.getElementById('suggestions');
 
@@ -55,7 +118,6 @@
 
                 if (query) {
                     const matches = schoolData.filter(school => school.name.toLowerCase().includes(query));
-
                     matches.forEach(match => {
                         const option = document.createElement('div');
                         option.textContent = match.name;
@@ -76,10 +138,9 @@
                 const residency = document.getElementById('residency').value;
 
                 const school = schoolData.find(school => school.name === schoolName);
+                const result = document.getElementById('result');
                 if (school) {
                     const price = school.prices[livingSituation]?.[residency];
-                    const result = document.getElementById('result');
-
                     if (price !== undefined) {
                         result.textContent = `The price for ${schoolName} (${livingSituation}, ${residency}) is $${price}.`;
                     } else {
@@ -89,50 +150,49 @@
                     alert('School not found. Please select a valid school from the suggestions.');
                 }
             });
+
+            // Add to compare list
+            document.getElementById('add-to-compare').addEventListener('click', () => {
+                const schoolName = schoolInput.value;
+                const school = schoolData.find(s => s.name === schoolName);
+
+                if (school && !selectedSchools.includes(school)) {
+                    selectedSchools.push(school);
+                    const listItem = document.createElement('li');
+                    listItem.textContent = school.name;
+                    document.getElementById('compare-list-items').appendChild(listItem);
+                    alert(`${school.name} added to compare list.`);
+                } else {
+                    alert('School not found or already added.');
+                }
+            });
+
+            // Download Excel file
+            document.getElementById('download-excel').addEventListener('click', () => {
+                if (selectedSchools.length === 0) {
+                    alert('No schools to download.');
+                    return;
+                }
+
+                const data = selectedSchools.map(school => ({
+                    Name: school.name,
+                    'On-Campus In-District': school.prices['on-campus']?.['in-district'] || 'N/A',
+                    'On-Campus In-State': school.prices['on-campus']?.['in-state'] || 'N/A',
+                    'On-Campus Out-of-State': school.prices['on-campus']?.['out-of-state'] || 'N/A',
+                    'Off-Campus (Not with Family) In-District': school.prices['off-campus (not with family)']?.['in-district'] || 'N/A',
+                    'Off-Campus (Not with Family) In-State': school.prices['off-campus (not with family)']?.['in-state'] || 'N/A',
+                    'Off-Campus (Not with Family) Out-of-State': school.prices['off-campus (not with family)']?.['out-of-state'] || 'N/A',
+                    'Off-Campus (With Family) In-District': school.prices['off-campus (with family)']?.['in-district'] || 'N/A',
+                    'Off-Campus (With Family) In-State': school.prices['off-campus (with family)']?.['in-state'] || 'N/A',
+                    'Off-Campus (With Family) Out-of-State': school.prices['off-campus (with family)']?.['out-of-state'] || 'N/A',
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Schools');
+                XLSX.writeFile(wb, 'schools-comparison.xlsx');
+            });
         });
     </script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        #suggestions {
-            border: 1px solid #ccc;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-        .suggestion {
-            padding: 5px;
-            cursor: pointer;
-        }
-        .suggestion:hover {
-            background-color: #f0f0f0;
-        }
-    </style>
-</head>
-<body>
-    <h1>School Price Lookup</h1>
-
-    <label for="school">School Name:</label>
-    <input type="text" id="school" placeholder="Type to search...">
-    <div id="suggestions"></div>
-
-    <label for="living-situation">Living Situation:</label>
-    <select id="living-situation">
-        <option value="on-campus">On-Campus</option>
-        <option value="off-campus (not with family)">Off-Campus (Not with Family)</option>
-        <option value="off-campus (with family)">Off-Campus (With Family)</option>
-    </select>
-
-    <label for="residency">Residency:</label>
-    <select id="residency">
-        <option value="in-district">In-District</option>
-        <option value="in-state">In-State</option>
-        <option value="out-of-state">Out-of-State</option>
-    </select>
-
-    <button id="lookup">Look Up Price</button>
-
-    <h2 id="result"></h2>
 </body>
 </html>
