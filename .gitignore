@@ -5,3 +5,8 @@ ENV/
 ENV.*/
 .env/
 .venv/
+.DS_Store
+*.key
+*.enc
+.jpeg
+*.dat
