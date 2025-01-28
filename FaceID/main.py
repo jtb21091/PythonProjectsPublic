@@ -59,61 +59,82 @@ class SecureFaceRecognition:
             os.remove(compressed_file)
             print(f"Model {output_path} ready for use.")
 
-    def capture_face_embedding(self):
-        """Capture face embedding using Dlib from the webcam."""
-        print("Accessing webcam. Press 's' to save or 'q' to quit.")
+    def capture_face_embedding(self, live_mode=False, stored_embedding=None):
+        """Capture face embedding using Dlib from the webcam and save the image."""
+        print("Accessing webcam. Ensure proper lighting and position your face in the center.")
+        print("Press 's' to save a picture and face embedding or 'q' to quit.")
         cap = cv2.VideoCapture(0)
 
         if not cap.isOpened():
             raise Exception("Could not access the webcam.")
 
         embedding = None
+        captured_image = None
 
-        while True:
-            # Capture frame-by-frame
-            ret, frame = cap.read()
-            if not ret:
-                print("Failed to grab frame.")
-                break
+        try:
+            while True:
+                # Capture frame-by-frame
+                ret, frame = cap.read()
+                if not ret:
+                    print("Failed to grab frame.")
+                    break
 
-            # Convert to grayscale for Dlib
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.detector(gray)
+                # Convert to grayscale for Dlib processing
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self.detector(gray)
 
-            # Highlight detected face(s) in the webcam feed
-            for face in faces:
-                x, y, w, h = (face.left(), face.top(), face.width(), face.height())
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # Draw rectangles around detected faces
+                for face in faces:
+                    x, y, w, h = (face.left(), face.top(), face.width(), face.height())
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-            cv2.imshow("Webcam Face Capture - Press 's' to Save or 'q' to Quit", frame)
+                    # If in live mode, compare with stored embedding
+                    if live_mode and stored_embedding is not None:
+                        shape = self.shape_predictor(gray, face)
+                        live_embedding = np.array(self.face_recognizer.compute_face_descriptor(frame, shape))
+                        distance = np.linalg.norm(stored_embedding - live_embedding)
 
-            # Handle key presses
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('s') and len(faces) > 0:  # Save the face embedding if 's' is pressed
-                face = faces[0]
-                shape = self.shape_predictor(gray, face)
-                embedding = np.array(self.face_recognizer.compute_face_descriptor(frame, shape))
-                print("Face embedding captured.")
-                break
-            elif key == ord('q'):  # Quit without saving
-                print("Exiting webcam without capturing face.")
-                break
+                        if distance < 0.6:
+                            label = f"Recognized (Dist: {distance:.2f})"
+                        else:
+                            label = f"Not Recognized (Dist: {distance:.2f})"
 
-        cap.release()
-        cv2.destroyAllWindows()
+                        cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0) if distance < 0.6 else (0, 0, 255), 2)
 
-        if embedding is None:
-            raise ValueError("No face embedding was captured. Please try again.")
+                cv2.imshow("Webcam Face Capture - Press 's' to Save or 'q' to Quit", frame)
+
+                # Handle key presses
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('s') and len(faces) > 0:  # Save the face embedding and image
+                    face = faces[0]
+                    shape = self.shape_predictor(gray, face)
+                    embedding = np.array(self.face_recognizer.compute_face_descriptor(frame, shape))
+                    captured_image = frame.copy()
+                    print("Face embedding and image captured successfully.")
+                    break
+                elif key == ord('q'):  # Quit without saving
+                    print("Exiting webcam without capturing face.")
+                    break
+        finally:
+            cap.release()
+            cv2.destroyAllWindows()
+
+        if embedding is None and not live_mode:
+            raise ValueError("No face embedding or image was captured. Please position your face correctly and try again.")
+
+        if not live_mode and captured_image is not None:
+            # Save the captured image
+            image_file_name = "captured_face.jpg"
+            cv2.imwrite(image_file_name, captured_image)
+            print(f"Captured image saved as {image_file_name}")
 
         return embedding
 
     def encrypt_data(self, data):
         """Encrypt data using Fernet symmetric encryption."""
         metadata = f"{data.dtype}:{data.shape}".encode()
-        print("Metadata for encryption:", metadata)  # Debug
         data_bytes = data.tobytes()
         combined_data = metadata + b"||" + data_bytes
-        print("Combined Data Before Encryption:", combined_data[:100])  # Debug
         fernet = Fernet(self.key)
         encrypted_data = fernet.encrypt(combined_data)
         return encrypted_data
@@ -130,32 +151,22 @@ class SecureFaceRecognition:
         fernet = Fernet(self.key)
         with open(file_name, "rb") as file:
             encrypted_data = file.read()
-        print("Encrypted Data Loaded:", encrypted_data[:100])  # Debug
 
         decrypted_data = fernet.decrypt(encrypted_data)
-        print("Decrypted Data:", decrypted_data[:100])  # Debug
 
         if b"||" not in decrypted_data:
             raise ValueError("Decrypted data is improperly formatted. '||' delimiter is missing.")
-        
-        metadata, data_bytes = decrypted_data.split(b"||", 1)
-        print("Metadata:", metadata)  # Debug
 
-        try:
-            dtype, shape = metadata.decode().split(":")
-            print("Parsed dtype:", dtype)  # Debug
-            print("Parsed shape (raw):", shape)  # Debug
-            shape = eval(shape)  # Convert string "(128,)" into a Python tuple
-            print("Parsed shape (evaluated):", shape)  # Debug
-        except Exception as e:
-            raise ValueError(f"Metadata parsing failed. Metadata: {metadata}, Error: {e}")
+        metadata, data_bytes = decrypted_data.split(b"||", 1)
+        dtype, shape = metadata.decode().split(":")
+        shape = eval(shape)  # Convert string to tuple
 
         return np.frombuffer(data_bytes, dtype=dtype).reshape(shape)
 
     def compare_embeddings(self, embedding1, embedding2, threshold=0.6):
         """Compare two embeddings using Euclidean distance."""
         distance = np.linalg.norm(embedding1 - embedding2)
-        print(f"Calculated Distance: {distance}")
+        print(f"Calculated Distance: {distance}")  # Debug: show distance
         return distance < threshold
 
 
@@ -165,17 +176,18 @@ if __name__ == "__main__":
 
     try:
         if os.path.exists("face_data.enc"):
+            # Load stored embedding
             stored_embedding = face_recognition.load_and_decrypt("face_data.enc")
             print("Stored Face Embedding Loaded.")
+
+            # Live recognition mode
+            print("Entering live recognition mode. Position yourself in front of the camera.")
+            face_recognition.capture_face_embedding(live_mode=True, stored_embedding=stored_embedding)
+
         else:
             print("No stored face data found. Please capture your face embedding first.")
             new_embedding = face_recognition.capture_face_embedding()
             face_recognition.save_securely(new_embedding, "face_data.enc")
             print("Face embedding saved securely.")
-            exit(0)
-
-        new_embedding = face_recognition.capture_face_embedding()
-        is_match = face_recognition.compare_embeddings(stored_embedding, new_embedding)
-        print("Face recognized!" if is_match else "Face not recognized.")
     except Exception as e:
         print("Error:", e)
